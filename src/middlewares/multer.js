@@ -24,7 +24,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, done) => {
-    if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
+    console.log("file.mimetype", file.mimetype)
+    if (file.mimetype === 'image/jpeg' || file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'|| file.mimetype === 'image/png') {
       done(null, true);
     } else {
       done(new Error('Incorrect file type'), false);

@@ -12,12 +12,12 @@ const defaultRoutes = [
     route: authRoute,
   },
   {
-    path: '/upload',
-    route: uploadRoute,
-  },
-  {
     path: '/users',
     route: userRoute,
+  },
+  {
+    path: '/upload',
+    route: uploadRoute,
   },
 ];
 
