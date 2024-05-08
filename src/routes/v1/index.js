@@ -21,19 +21,8 @@ const defaultRoutes = [
   },
 ];
 
-
-
-
-
-
-
-
-
-
-
 const devRoutes = [
   // routes available only in development mode
-
 ];
 
 defaultRoutes.forEach((route) => {

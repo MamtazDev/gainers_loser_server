@@ -7,14 +7,13 @@ const countryList = catchAsync(async (req, res) => {
   res.status(httpStatus.CREATED).send({ countryList });
 });
 
+const GainLoses = catchAsync(async (req, res) => {
 
-const GainLoses = catchAsync(async (_req, res) => {
-  const modifiedStocks = await uplaodService.getAllGainLoses();  
-  res.status(httpStatus.CREATED).send({ getAllGainLoses: modifiedStocks.length, Data: modifiedStocks });
+  const modifiedStocks = await uplaodService.getAllGainLoses(req);
+  res.status(httpStatus.CREATED).send({ getAllGainLoses: modifiedStocks?.length, Data: modifiedStocks });
 });
-
 
 module.exports = {
   countryList,
-  GainLoses
+  GainLoses,
 };
