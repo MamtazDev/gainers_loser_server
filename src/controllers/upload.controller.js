@@ -8,7 +8,6 @@ const countryList = catchAsync(async (req, res) => {
 });
 
 const GainLoses = catchAsync(async (req, res) => {
-
   const modifiedStocks = await uplaodService.getAllGainLoses(req);
   res.status(httpStatus.CREATED).send({ getAllGainLoses: modifiedStocks?.length, Data: modifiedStocks });
 });

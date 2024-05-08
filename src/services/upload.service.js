@@ -8,13 +8,15 @@
 /* eslint-disable no-console */
 const httpStatus = require('http-status');
 const axios = require('axios');
+const { log } = require('winston');
 const ApiError = require('../utils/ApiError');
 const { Country } = require('../models');
+const Data = require('../models/data.model');
 
 const createCountryList = async (payload) => {
   console.log('countryList:', payload);
   try {
-    for (let countryData of payload) {
+    for (const countryData of payload) {
       // Check if a country with the same Ticker already exists
       const existingCountry = await Country.findOne({ Ticker: countryData.Ticker });
       if (existingCountry) {
@@ -43,10 +45,10 @@ const getAllGainLoses = async (req) => {
     const modifiedStocks = [];
     const apiKey = 'PX3USK5O28KQACMI';
 
-    for (const stock of countriesData.slice(0,10)) {
+    for (const stock of countriesData.slice(0, 10)) {
       const symbol = stock.Ticker;
 
-      if (!!symbol) {
+      if (symbol) {
         const modifiedStock = {
           ...stock._doc,
           oneDay: null,
@@ -147,33 +149,30 @@ const getAllGainLosestwo = async (req) => {
     const countriesData = await Country.find({});
     // console.log("countriesData:", countriesData.slice(0,10))
 
-    //pagination part start
-    
-    const {page} = req.query;
-    console.log("Page:", page)
+    // pagination part start
+
+    const { page } = req.query;
+    console.log('Page:', page);
 
     const productsPerPage = 15;
 
     // Function to paginate products
     function paginateProducts(page) {
-        const startIndex = (page - 1) * productsPerPage;
-        const endIndex = startIndex + productsPerPage;
+      const startIndex = (page - 1) * productsPerPage;
+      const endIndex = startIndex + productsPerPage;
 
-        
-        console.log("startIndex", startIndex)
-        console.log("endIndex", endIndex)
+      console.log('startIndex', startIndex);
+      console.log('endIndex', endIndex);
 
-        return countriesData.slice(startIndex, endIndex);
+      return countriesData.slice(startIndex, endIndex);
     }
 
     // Example usage:
     const currentPage = page; // Assuming the current page is 1
     const productsToShow = paginateProducts(currentPage);
-    console.log(productsToShow); 
+    console.log(productsToShow);
 
-    //pagination part end
-
-
+    // pagination part end
 
     const modifiedStocks = [];
     const apiKey = 'PX3USK5O28KQACMI';
@@ -181,7 +180,7 @@ const getAllGainLosestwo = async (req) => {
     for (const stock of productsToShow) {
       const symbol = stock.Ticker;
 
-      if (!!symbol) {
+      if (symbol) {
         const modifiedStock = {
           ...stock._doc,
           oneDay: null,
@@ -287,6 +286,120 @@ const alphaVantageAPI = axios.create({
   },
 });
 
+const cronHandler = async () => {
+  const records = await Country.find({}).countDocuments();
+  const limit = 20;
+  const iterate = Math.ceil(records / limit);
+
+  console.log('Start');
+
+  for (let i = 0; i < iterate; i++) {
+    const countries = await Country.find({})
+      .skip(i * limit)
+      .limit(limit);
+
+    for (const stock of countries) {
+      const symbol = stock.Ticker;
+
+      if (symbol) {
+        const modifiedStock = {
+          ...stock._doc,
+          oneDay: null,
+          oneWeek: null,
+          oneMonth: null,
+          threeMonth: null,
+          sixMonth: null,
+          oneYear: null,
+        };
+
+        const apiUrls = [
+          {
+            name: 'daily',
+            api: `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&apikey=${apiKey}`,
+          },
+          {
+            name: 'weekly',
+            api: `https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=${symbol}&apikey=${apiKey}`,
+          },
+          {
+            name: 'monthly',
+            api: `https://www.alphavantage.co/query?function=TIME_SERIES_MONTHLY&symbol=${symbol}&apikey=${apiKey}`,
+          },
+        ];
+
+        for (const apiUrl of apiUrls) {
+          const response = await axios.get(apiUrl.api);
+
+          // --------Daily--------
+          if (apiUrl.name === 'daily') {
+            const dailyData = response.data['Time Series (Daily)'];
+
+            const element1 = Object.entries(dailyData)[0];
+            const element2 = Object.entries(dailyData)[1];
+
+            const open = parseFloat(element2[1]['1. open']);
+            const close = parseFloat(element1[1]['4. close']);
+
+            modifiedStock['oneDay'] = parseFloat(open - close);
+          }
+          // --------weekly--------
+          else if (apiUrl.name === 'weekly') {
+            const weeklyData = response.data['Weekly Time Series'];
+
+            const element1 = Object.entries(weeklyData)[0];
+            const element2 = Object.entries(weeklyData)[1];
+
+            const open = parseFloat(element2[1]['1. open']);
+            const close = parseFloat(element1[1]['4. close']);
+
+            modifiedStock['oneWeek'] = parseFloat(open - close);
+          }
+          // --------Monthly--------
+          else {
+            const monthlyData = response.data['Monthly Time Series'];
+
+            const firstMonth = Object.entries(monthlyData)[0];
+            const secondMonth = Object.entries(monthlyData)[1];
+            const thirdMonth = Object.entries(monthlyData)[2];
+            const sixMonth = Object.entries(monthlyData)[5];
+            const year = Object.entries(monthlyData)[11];
+
+            const open = parseFloat(secondMonth[1]['1. open']);
+            const close = parseFloat(firstMonth[1]['4. close']);
+
+            modifiedStock['oneMonth'] = parseFloat(open - close);
+
+            // --------3 Months--------
+            if (thirdMonth) {
+              const thirdMonthOpen = parseFloat(thirdMonth[1]['1. open']);
+              modifiedStock['threeMonth'] = parseFloat(thirdMonthOpen - close);
+            }
+
+            // --------6 Months--------
+            if (sixMonth) {
+              const sixMonthOpen = parseFloat(sixMonth[1]['1. open']);
+              modifiedStock['sixMonth'] = parseFloat(sixMonthOpen - close);
+            }
+
+            // --------Year--------
+            if (year) {
+              const yearOpen = parseFloat(year[1]['1. open']);
+              modifiedStock['oneYear'] = parseFloat(yearOpen - close);
+            }
+          }
+        }
+
+        await Data.create(modifiedStock);
+        console.log('created', i);
+      }
+    }
+  }
+
+  console.log('Finished');
+};
+
+// cronHandler();
+
 // const getAllGainLoses = async (req, res) => {
 //   try {
 //     const getAllGainLoses = await Country.find({}).lean(); // Use lean() to return plain JS objects
@@ -331,4 +444,5 @@ const alphaVantageAPI = axios.create({
 module.exports = {
   createCountryList,
   getAllGainLoses,
+  cronHandler,
 };
